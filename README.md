@@ -56,18 +56,18 @@ The model does not emit joint angles. The script matches words in the user text 
 
 The gesture runs in a thread so speech is not delayed. GESTURE: wave only means the branch ran. If the arm does not move, print the qicli return code.
 
-Time and date
+## Time and date
 
 Qwen has no clock. If the transcript mentions time, date, today, or day, the Mac adds a line like Current time: Thursday, October 01, 2026, 12:08 PM before the chat request. The system prompt tells the model to speak that line and not invent a time. This is the Mac timezone, not Pepper's clock.
 
-Run order
+## Run order
 
 On Pepper, wait until the log says waiting for Mac on port 43000.
 Then start pepper_whisper.py on the Mac.
 Speak after Speak now.
 Starting the Mac first produces mic connect retry ... timed out.
 
-Run at Boot
+## Run at Boot
 /home/nao/naoqi/preferences/autoload.ini [python] is more reliable than [program] on NAOqi 2.5. launch_mic.py is the file to list there:
 [python]
 /home/nao/launch_mic.py
@@ -76,8 +76,8 @@ That launcher sets PYTHONPATH, kills any old pepper_mic.py, starts a new one, an
 
 Do not start launch_mic.py and pepper_mic.py by hand at the same time.
 
-Notes:
-Built-in ALSpeechRecognition is a small closed vocabulary. This project does not use it.
-Mute is implicit: the Mac only reads audio while listening, but the robot keeps sending.
-The Mac reader thread must keep draining the socket during Qwen and speech, or Pepper's send buffer fills and the client drops.
-Qwen sometimes returns an empty content and puts the sentence in reasoning_content. The script uses whichever is non-empty and strips <think> tags.
+## Notes:
+- Built-in ALSpeechRecognition is a small closed vocabulary. This project does not use it.
+- Mute is implicit: the Mac only reads audio while listening, but the robot keeps sending.
+- The Mac reader thread must keep draining the socket during Qwen and speech, or Pepper's send buffer fills and the client drops.
+- Qwen sometimes returns an empty content and puts the sentence in reasoning_content. The script uses whichever is non-empty and strips <think> tags.
