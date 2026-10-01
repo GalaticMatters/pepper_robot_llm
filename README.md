@@ -21,7 +21,7 @@ Pepper cannot run MLX Whisper or Qwen. Do not put the Mac script on the robot.
 ```bash
 python3 -m pip install mlx-whisper openai numpy
 brew install ffmpeg
-
+```
 pepper_mic.py
 
 Runs on the robot. Registers a NAOqi module, listens on 0.0.0.0:43000, and sends 16 kHz 16-bit PCM from the front mic after a client connects. It sends the banner READY first.
@@ -48,10 +48,11 @@ Set PEPPER_IP to the address Pepper speaks when the chest button is pressed.
 Gestures
 
 The model does not emit joint angles. The script matches words in the user text and the reply:
-Words	                                              Action
-hello, hi, hey, good morning	                      right-arm wave via   ALMotion.setAngles
-yes, okay, sure	                                    animations/Stand/Gestures/Yes_1
-no, nope	                                          animations/Stand/Gestures/No_1
+| Words |	Action |
+| :--- | :--- |
+|hello, hi, hey, good morning	| right-arm wave via   ALMotion.setAngles |
+| yes, okay, sure |	animations/Stand/Gestures/Yes_1 |
+| no, nope | animations/Stand/Gestures/No_1 |
 
 The gesture runs in a thread so speech is not delayed. GESTURE: wave only means the branch ran. If the arm does not move, print the qicli return code.
 
