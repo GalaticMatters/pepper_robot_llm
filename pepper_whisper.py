@@ -1,3 +1,4 @@
+import argparse
 import re
 import socket
 import struct
@@ -26,10 +27,6 @@ _reader_stop = threading.Event()
 
 SAMPLE_RATE = 16000
 FRAME_MS = 30
-START_TIMEOUT = 5.0
-MAX_LISTEN = 15
-SILENCE_TO_STOP = 1.8
-CALIBRATE_MS = 500
 
 THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
@@ -38,6 +35,39 @@ history = [{
     "role": "system",
     "content": "You are Pepper. Reply in one or two short spoken sentences. Do not think aloud."
 }]
+
+def parse_args():
+    p = argparse.ArgumentParser(
+        description="Pepper voice loop. Listens on the robot mic, transcribes, and replies with Qwen.",
+        epilog="Examples: python3 pepper_whisper.py    python3 pepper_whisper.py quiet    python3 pepper_whisper.py noisy",
+    )
+    p.add_argument(
+        "place",
+        nargs="?",
+        default="quiet",
+        choices=("quiet", "noisy"),
+        help="room type. default: quiet. noisy uses a crowd threshold.",
+    )
+    return p.parse_args()
+
+ARGS = parse_args()
+
+if ARGS.place == "noisy":
+    CALIBRATE_MS = 800
+    START_TIMEOUT = 8.0
+    MAX_LISTEN = 12.0
+    SILENCE_TO_STOP = 1.2
+    NOISE_MULT = 2.2
+    SPEECH_FLOOR = 0.02
+else:
+    CALIBRATE_MS = 500
+    START_TIMEOUT = 5.0
+    MAX_LISTEN = 15.0
+    SILENCE_TO_STOP = 1.8
+    NOISE_MULT = 3.5
+    SPEECH_FLOOR = 0.008
+
+print("place:", ARGS.place)
 
 def pepper_ssh(remote_cmd: str) -> subprocess.CompletedProcess:
     return subprocess.run(
@@ -51,6 +81,7 @@ def pepper_ssh(remote_cmd: str) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
     )
+
 
 def mac_now() -> str:
     return datetime.now().strftime("%A, %B %d, %Y, %I:%M %p")
@@ -256,7 +287,7 @@ def hear() -> str:
             return ""
         noise_vals.append(rms(frame))
     noise_floor = float(np.median(noise_vals))
-    speech_rms = max(noise_floor * 3.5, 0.008)
+    speech_rms = max(noise_floor * NOISE_MULT, SPEECH_FLOOR)
     print("noise=%.4f  speech_threshold=%.4f" % (noise_floor, speech_rms))
     print("Speak now.")
 
