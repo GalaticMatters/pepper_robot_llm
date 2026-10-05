@@ -314,7 +314,7 @@ try:
             print("MAC CLOCK:", now)
             user_msg = text + "\n\nCurrent time: " + now
 
-        history.append({"role": "user", "content": text})
+        history.append({"role": "user", "content": user_msg})
 
         resp = llm.chat.completions.create(
             model=MODEL,
