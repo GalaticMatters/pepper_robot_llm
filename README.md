@@ -81,3 +81,5 @@ Do not start launch_mic.py and pepper_mic.py by hand at the same time.
 - Mute is implicit: the Mac only reads audio while listening, but the robot keeps sending.
 - The Mac reader thread must keep draining the socket during Qwen and speech, or Pepper's send buffer fills and the client drops.
 - Qwen sometimes returns an empty content and puts the sentence in reasoning_content. The script uses whichever is non-empty and strips <think> tags.
+- To stop pepper from talking after disconnected from LLM:
+  ssh nao@192.168.1.13 "qicli call ALTextToSpeech.stopAll; qicli call ALAnimatedSpeech.say \" \"; qicli call ALAutonomousLife.setState disabled; qicli call ALDialog.stopDialog; qicli call ALSpeechRecognition.pause 1"
