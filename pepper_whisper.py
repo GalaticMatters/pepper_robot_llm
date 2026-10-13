@@ -7,7 +7,7 @@ import time
 import threading
 import numpy as np
 import mlx_whisper
-from openai import OpenAI
+from openai import DefaultHttpx2Client, OpenAI
 from collections import deque
 from datetime import datetime
 
@@ -15,7 +15,7 @@ PEPPER_IP = "192.168.1.13"
 PEPPER_USER = "nao"
 MIC_PORT = 43000
 
-LLM_URL = "http://127.0.0.1:8080/v1"
+LLM_URL = "http://127.0.0.1:8081/v1"
 MODEL = "lmstudio-community/Qwen3.8-27B-MLX-6bit"
 WHISPER = "mlx-community/whisper-large-v3-turbo"
 
@@ -29,8 +29,17 @@ SAMPLE_RATE = 16000
 FRAME_MS = 30
 
 THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+SYSTEM = {
+    "role": "system",
+    "content": "You are Pepper. Reply in one or two short spoken sentences. Do not think aloud.",
+}
 
-llm = OpenAI(base_url=LLM_URL, api_key="local")
+#llm = OpenAI(base_url=LLM_URL, api_key="local")
+llm = OpenAI(
+    base_url=LLM_URL,
+    api_key="local",
+    http_client=DefaultHttpx2Client(trust_env=False),
+)
 history = [{
     "role": "system",
     "content": "You are Pepper. Reply in one or two short spoken sentences. Do not think aloud."
@@ -132,7 +141,7 @@ def gesture_for(user_text: str, reply: str) -> None:
     t = (user_text + " " + reply).lower()
     if any(w in t for w in ("hello", "hi", "hey", "good morning")):
         print("GESTURE: wave")
-        wave()
+        #wave()
     elif any(w in t for w in ("yes", "okay", "sure")):
         print("GESTURE: yes")
         play_anim("animations/Stand/Gestures/Yes_1")
@@ -328,48 +337,45 @@ def hear() -> str:
     return (out.get("text") or "").strip()
 
 prepare_pepper()
-wave()
+#wave()
 robot_say("Hello. I am ready to talk.")
 mic_connect()
 
 try:
     while True:
         text = hear()
-        print("TEXT:", repr(text))
+        print("TEXT:", repr(text), flush=True)
         if not text:
             continue
-
         user_msg = text
         if looks_like_time(text):
             now = mac_now()
-            print("MAC CLOCK:", now)
+            print("MAC CLOCK:", now, flush=True)
             user_msg = text + "\n\nCurrent time: " + now
-
-        history.append({"role": "user", "content": user_msg})
-
-        resp = llm.chat.completions.create(
-            model=MODEL,
-            messages=history,
-            max_tokens=1024,
-            temperature=0.7,
-            top_p=0.8,
-            extra_body={
-                "think": False,
-                "enableThinking": False,
-                "reasoning_effort": "low",
-                "chat_template_kwargs": {"enable_thinking": False},
-            },
-        )
-        reply = extract_reply(resp)
-        if not reply:
-            print("EMPTY MODEL REPLY")
+        print("ASK:", user_msg, flush=True)
+        try:
+            resp = llm.chat.completions.create(
+                model=MODEL,
+                messages=[SYSTEM, {"role": "user", "content": user_msg}],
+                max_tokens=200,
+                temperature=0.7,
+                top_p=0.8,
+                extra_body={
+                    "think": False,
+                    "enableThinking": False,
+                    "reasoning_effort": "low",
+                    "chat_template_kwargs": {"enable_thinking": False},
+                },
+            )
+        except Exception as exc:
+            print("CHAT FAILED:", exc, flush=True)
             robot_say("Please say that again.")
-            history.pop()
             continue
-
-        history.append({"role": "assistant", "content": reply})
-        if len(history) > 17:
-            history = history[:1] + history[-16:]
+        reply = extract_reply(resp)
+        print("REPLY:", repr(reply), flush=True)
+        if not reply:
+            robot_say("Please say that again.")
+            continue
         threading.Thread(target=gesture_for, args=(text, reply), daemon=True).start()
         robot_say(reply)
 finally:

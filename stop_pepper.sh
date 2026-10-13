@@ -1,0 +1,1 @@
+ssh nao@192.168.1.13 "qicli call ALTextToSpeech.stopAll; qicli call ALAnimatedSpeech.say " "; qicli call ALAutonomousLife.setState disabled; qicli call ALDialog.stopDialog; qicli call ALSpeechRecognition.pause 1"
