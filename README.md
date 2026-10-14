@@ -56,6 +56,19 @@ The model does not emit joint angles. The script matches words in the user text 
 
 The gesture runs in a thread so speech is not delayed. GESTURE: wave only means the branch ran. If the arm does not move, print the qicli return code.
 
+## Dances and handshake
+
+`backpack_kid_dance.py` plays these when the word is in what you said. A named move wins. The word dance alone cycles through the list. Each hand has one motor, so the fingers on that hand open and close together.
+
+| Words | Move |
+| :--- | :--- |
+| floss, backpack | Backpack Kid floss: hips sway one way while the arms swing the other |
+| robot | stiff arms lock, then one side lifts |
+| disco, sway | one arm up, hips swap |
+| sky, push the sky, push the air | both hands drop, then shove upward |
+| shake, handshake | right hand reaches out, fingers close, the arm shakes, then the hand lets go |
+| dance | the next move in this list |
+
 ## Time and date
 
 Qwen has no clock. If the transcript mentions time, date, today, or day, the Mac adds a line like Current time: Thursday, October 01, 2026, 12:08 PM before the chat request. The system prompt tells the model to speak that line and not invent a time. This is the Mac timezone, not Pepper's clock.
