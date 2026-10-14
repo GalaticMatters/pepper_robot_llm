@@ -63,12 +63,12 @@ def parse_args():
 ARGS = parse_args()
 
 if ARGS.place == "noisy":
-    CALIBRATE_MS = 800
+    CALIBRATE_MS = 1200
     START_TIMEOUT = 8.0
-    MAX_LISTEN = 12.0
-    SILENCE_TO_STOP = 1.2
-    NOISE_MULT = 2.2
-    SPEECH_FLOOR = 0.02
+    MAX_LISTEN = 10.0
+    SILENCE_TO_STOP = 1.0
+    NOISE_MULT = 3.5
+    SPEECH_FLOOR = 0.035
 else:
     CALIBRATE_MS = 500
     START_TIMEOUT = 5.0
