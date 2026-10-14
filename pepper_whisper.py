@@ -6,6 +6,7 @@ import subprocess
 import time
 import threading
 import numpy as np
+import backpack_kid_dance
 import mlx_whisper
 from openai import DefaultHttpx2Client, OpenAI
 from collections import deque
@@ -138,6 +139,10 @@ def play_anim(name: str) -> None:
     pepper_ssh('qicli call ALAnimationPlayer.run "%s"' % name)
 
 def gesture_for(user_text: str, reply: str) -> None:
+    if "dance" in user_text.lower():
+        print("GESTURE: backpack kid")
+        backpack_kid_dance.play(pepper_ssh)
+        return
     t = (user_text + " " + reply).lower()
     if any(w in t for w in ("hello", "hi", "hey", "good morning")):
         print("GESTURE: wave")
