@@ -87,29 +87,40 @@ def _sky():
     return steps
 
 
-# Right hand forward. RHand is the finger motor: 1 open, 0 closed.
-# The hand opens at the side, the arm reaches while it stays open, then the fingers close.
-SHAKE_OPEN = [0.00, 0.00, 1.35, 0.12, -1.20, -0.40, 1.35, -0.12, 1.20, 0.40, 0.60, 1.00]
-SHAKE_OFFER = [0.00, -0.20, 1.35, 0.12, -1.20, -0.40, 0.40, -0.10, 1.10, 0.50, 0.60, 1.00]
-SHAKE_GRIP = [0.00, -0.20, 1.35, 0.12, -1.20, -0.40, 0.40, -0.10, 1.10, 0.50, 0.60, 0.28]
-SHAKE_UP = [0.00, -0.10, 1.35, 0.12, -1.20, -0.40, 0.15, -0.08, 1.00, 0.40, 0.60, 0.28]
-SHAKE_DOWN = [0.00, -0.25, 1.35, 0.12, -1.20, -0.40, 0.55, -0.12, 1.20, 0.65, 0.60, 0.28]
-
-
-def _shake():
-    steps = [
-        (REST, 0.30),
-        (SHAKE_OPEN, 0.35),
-        (SHAKE_OFFER, 0.85),
-        (SHAKE_OFFER, 0.40),
-        (SHAKE_GRIP, 0.40),
-    ]
-    for _ in range(4):
-        steps.append((SHAKE_UP, 0.22))
-        steps.append((SHAKE_DOWN, 0.22))
-    steps.append((SHAKE_OFFER, 0.40))
-    steps.append((REST, 0.55))
-    return steps
+# Handshake reads the live right-arm angles, then reaches forward from there.
+# The finger motor stays open until that reach has finished.
+SHAKE_REMOTE = r"""
+from naoqi import ALProxy
+motion = ALProxy("ALMotion", "127.0.0.1", 9559)
+motion.wakeUp()
+motion.setStiffnesses("RArm", 0.6)
+names = ["RShoulderPitch", "RShoulderRoll", "RElbowYaw", "RElbowRoll", "RWristYaw"]
+# Nearly straight forward: pitch ~0 is horizontal, elbow roll near 0 is extended.
+target = [0.15, -0.20, 1.15, 0.20, 0.30]
+current = motion.getAngles(names, True)
+print "arm now", [round(v, 3) for v in current]
+motion.openHand("RHand")
+angles = []
+times = []
+for i in range(len(names)):
+    angles.append([current[i], target[i], target[i]])
+    times.append([0.15, 1.15, 1.55])
+motion.angleInterpolation(names, angles, times, True)
+motion.closeHand("RHand")
+motion.angleInterpolation(
+    ["RShoulderPitch"],
+    [[0.00, 0.30, 0.00, 0.30, 0.15]],
+    [[0.22, 0.44, 0.66, 0.88, 1.10]],
+    True)
+motion.openHand("RHand")
+back = []
+back_times = []
+for i in range(len(names)):
+    back.append([target[i], current[i]])
+    back_times.append([0.2, 1.1])
+motion.angleInterpolation(names, back, back_times, True)
+print "dance done"
+"""
 
 
 # words are matched against what the user said. First match wins.
@@ -118,7 +129,7 @@ MOVES = [
     ("robot", ("robot",), 0.85, _robot),
     ("disco", ("disco", "sway"), 0.55, _disco),
     ("sky", ("sky", "push the air", "push the sky"), 0.65, _sky),
-    ("shake", ("shake", "handshake"), 0.5, _shake),
+    ("shake", ("shake", "handshake"), 0.5, None),
 ]
 
 _next = 0
@@ -173,7 +184,10 @@ def _choose(said: str):
 
 def play(run, text: str) -> str:
     name, _words, stiffness, steps_fn = _choose(text.lower())
-    script = REMOTE % (repr(JOINTS), repr(steps_fn()), repr(stiffness))
+    if name == "shake":
+        script = SHAKE_REMOTE
+    else:
+        script = REMOTE % (repr(JOINTS), repr(steps_fn()), repr(stiffness))
     payload = base64.b64encode(script.encode("utf-8")).decode("ascii")
     cmd = (
         "PYTHONPATH=/opt/aldebaran/lib/python2.7/site-packages "
