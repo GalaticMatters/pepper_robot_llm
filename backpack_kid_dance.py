@@ -2,32 +2,41 @@
 
 import base64
 
-# Runs on the robot with NAOqi's Python 2.7. One call sets every joint together.
-# qicli treats a quoted list as a string, so setAngles through qicli returns 1.
+# Runs on the robot with NAOqi's Python 2.7.
+# One angleInterpolation call keeps the hips and arms moving, instead of
+# stopping at each pose the way setAngles does.
 REMOTE = r"""
-import time
 from naoqi import ALProxy
 
-SPEED = 0.75
-BEAT = 0.36
-REPEATS = 4
-JOINTS = ["HipRoll", "HeadYaw", "LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll", "RShoulderPitch", "RShoulderRoll", "RElbowYaw", "RElbowRoll"]
-LEFT = [0.15, -0.30, 0.45, 0.30, -1.50, -0.50, 1.50, -0.12, 1.20, 0.30]
-RIGHT = [-0.15, 0.30, 1.50, 0.12, -1.20, -0.30, 0.45, -0.30, 1.50, 0.50]
-REST = [0.00, 0.00, 1.40, 0.12, -1.20, -0.40, 1.40, -0.12, 1.20, 0.40]
+JOINTS = ["HipRoll", "HeadYaw", "LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll", "RShoulderPitch", "RShoulderRoll", "RElbowYaw", "RElbowRoll", "LHand", "RHand"]
+LEFT = [0.15, -0.25, 0.55, 0.25, -1.40, -0.45, 1.45, -0.12, 1.15, 0.30, 0.70, 0.70]
+RIGHT = [-0.15, 0.25, 1.45, 0.12, -1.15, -0.30, 0.55, -0.25, 1.40, 0.45, 0.70, 0.70]
+REST = [0.00, 0.00, 1.35, 0.12, -1.20, -0.40, 1.35, -0.12, 1.20, 0.40, 0.70, 0.70]
+BEAT = 0.55
+CYCLES = 4
+
+poses = [REST, LEFT]
+for _ in range(CYCLES):
+    poses.append(RIGHT)
+    poses.append(LEFT)
+poses.append(REST)
+
+times = []
+t = 0.6
+for _ in poses:
+    times.append(t)
+    t += BEAT
+
+angles = []
+time_lists = []
+for joint in range(len(JOINTS)):
+    angles.append([pose[joint] for pose in poses])
+    time_lists.append(times[:])
 
 motion = ALProxy("ALMotion", "127.0.0.1", 9559)
 motion.wakeUp()
-motion.setStiffnesses("Body", 0.8)
-motion.setAngles(["LHand", "RHand"], [0.7, 0.7], 0.5)
-time.sleep(0.2)
-for _ in range(REPEATS):
-    motion.setAngles(JOINTS, LEFT, SPEED)
-    time.sleep(BEAT)
-    motion.setAngles(JOINTS, RIGHT, SPEED)
-    time.sleep(BEAT)
-motion.setAngles(JOINTS, REST, 0.4)
-time.sleep(0.4)
+motion.setStiffnesses("Body", 0.6)
+motion.angleInterpolation(JOINTS, angles, time_lists, True)
 print "dance done"
 """
 
