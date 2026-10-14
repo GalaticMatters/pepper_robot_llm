@@ -37,6 +37,10 @@ ROBOT_RIGHT = [-0.08, -0.45, 1.30, 0.15, -1.40, -0.70, -0.70, -0.25, 1.40, 0.90,
 DISCO_LEFT = [0.18, -0.20, -0.50, 0.45, -1.20, -0.55, 1.40, -0.12, 1.20, 0.40, 0.90, 0.40]
 DISCO_RIGHT = [-0.18, 0.20, 1.40, 0.12, -1.20, -0.40, -0.50, -0.45, 1.20, 0.55, 0.40, 0.90]
 
+# Push the sky: both hands drop, then shove upward.
+SKY_LOW = [0.00, 0.00, 0.70, 0.20, -1.30, -0.90, 0.70, -0.20, 1.30, 0.90, 0.85, 0.85]
+SKY_UP = [0.00, 0.00, -1.15, 0.25, -1.20, -0.30, -1.15, -0.25, 1.20, 0.30, 1.00, 1.00]
+
 
 def _floss():
     beat = 0.55
@@ -73,11 +77,22 @@ def _disco():
     return steps
 
 
+def _sky():
+    steps = [(REST, 0.4), (SKY_LOW, 0.35)]
+    for _ in range(5):
+        steps.append((SKY_UP, 0.32))
+        steps.append((SKY_LOW, 0.38))
+    steps.append((SKY_UP, 0.32))
+    steps.append((REST, 0.55))
+    return steps
+
+
 # words are matched against what the user said. First match wins.
 MOVES = [
     ("floss", ("floss", "backpack"), 0.6, _floss),
     ("robot", ("robot",), 0.85, _robot),
     ("disco", ("disco", "sway"), 0.55, _disco),
+    ("sky", ("sky", "push the air", "push the sky"), 0.65, _sky),
 ]
 
 _next = 0
