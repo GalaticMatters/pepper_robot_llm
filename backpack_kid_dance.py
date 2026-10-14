@@ -87,12 +87,30 @@ def _sky():
     return steps
 
 
+# Right hand forward. RHand is the finger motor: 1 open, 0 closed.
+SHAKE_OFFER = [0.00, -0.20, 1.35, 0.12, -1.20, -0.40, 0.40, -0.10, 1.10, 0.50, 0.60, 1.00]
+SHAKE_GRIP = [0.00, -0.20, 1.35, 0.12, -1.20, -0.40, 0.40, -0.10, 1.10, 0.50, 0.60, 0.28]
+SHAKE_UP = [0.00, -0.10, 1.35, 0.12, -1.20, -0.40, 0.15, -0.08, 1.00, 0.40, 0.60, 0.34]
+SHAKE_DOWN = [0.00, -0.25, 1.35, 0.12, -1.20, -0.40, 0.55, -0.12, 1.20, 0.65, 0.60, 0.22]
+
+
+def _shake():
+    steps = [(REST, 0.35), (SHAKE_OFFER, 0.7), (SHAKE_GRIP, 0.35)]
+    for _ in range(4):
+        steps.append((SHAKE_UP, 0.22))
+        steps.append((SHAKE_DOWN, 0.22))
+    steps.append((SHAKE_OFFER, 0.4))
+    steps.append((REST, 0.55))
+    return steps
+
+
 # words are matched against what the user said. First match wins.
 MOVES = [
     ("floss", ("floss", "backpack"), 0.6, _floss),
     ("robot", ("robot",), 0.85, _robot),
     ("disco", ("disco", "sway"), 0.55, _disco),
     ("sky", ("sky", "push the air", "push the sky"), 0.65, _sky),
+    ("shake", ("shake", "handshake"), 0.5, _shake),
 ]
 
 _next = 0
