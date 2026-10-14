@@ -139,9 +139,8 @@ def play_anim(name: str) -> None:
     pepper_ssh('qicli call ALAnimationPlayer.run "%s"' % name)
 
 def gesture_for(user_text: str, reply: str) -> None:
-    if "dance" in user_text.lower():
-        print("GESTURE: backpack kid")
-        backpack_kid_dance.play(pepper_ssh)
+    if backpack_kid_dance.matches(user_text):
+        print("GESTURE:", backpack_kid_dance.play(pepper_ssh, user_text))
         return
     t = (user_text + " " + reply).lower()
     if any(w in t for w in ("hello", "hi", "hey", "good morning")):
