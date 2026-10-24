@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-import array
 import socket
-import struct
 import sys
 import threading
 import time
@@ -14,74 +12,6 @@ SAMPLE_RATE = 16000
 ALL_MICS = 0
 FRONT_MIC = 3
 
-
-def mix_mics(buffer, nb_of_channels, samples_per_channel, hold_channel):
-    """Return mono 16-bit PCM and the channel to keep next time.
-
-    Opposite mics cancel if they are added raw. Channels much quieter than
-    the loudest one are left out. The rest are shifted into agreement and
-    averaged, so a voice at the side is not thrown away.
-    """
-    if nb_of_channels <= 1:
-        return buffer, 0
-    count = samples_per_channel * nb_of_channels
-    raw = buffer[:count * 2]
-    vals = struct.unpack("<%dh" % count, raw)
-    channels = [vals[c::nb_of_channels] for c in range(nb_of_channels)]
-    energy = []
-    for ch in channels:
-        energy.append(sum(v * v for v in ch))
-    best = 0
-    for c in range(1, nb_of_channels):
-        if energy[c] > energy[best]:
-            best = c
-    if hold_channel is not None and energy[best] < energy[hold_channel] * 1.5:
-        best = hold_channel
-    loud = energy[best]
-    keep = []
-    for c in range(nb_of_channels):
-        if energy[c] * 4 >= loud:
-            keep.append(c)
-    ref = channels[best]
-    mixed = [0] * samples_per_channel
-    for c in keep:
-        src = channels[c]
-        lag = 0
-        if c != best:
-            lag = _best_lag(ref, src, 4)
-        for i in range(samples_per_channel):
-            j = i + lag
-            if 0 <= j < samples_per_channel:
-                mixed[i] += src[j]
-    scale = len(keep)
-    out = array.array("h")
-    for v in mixed:
-        v //= scale
-        if v > 32767:
-            v = 32767
-        elif v < -32768:
-            v = -32768
-        out.append(v)
-    return out.tostring(), best
-
-
-def _best_lag(ref, src, limit):
-    best_lag = 0
-    best_score = None
-    n = len(ref)
-    for lag in range(-limit, limit + 1):
-        score = 0
-        if lag >= 0:
-            for i in range(n - lag):
-                score += ref[i] * src[i + lag]
-        else:
-            for i in range(-lag, n):
-                score += ref[i] * src[i + lag]
-        if best_score is None or score > best_score:
-            best_score = score
-            best_lag = lag
-    return best_lag
-
 class SoundReceiver(ALModule):
     def __init__(self, name):
         ALModule.__init__(self, name)
@@ -92,7 +22,7 @@ class SoundReceiver(ALModule):
         self.audio = ALProxy("ALAudioDevice")
         self.subscribed = False
         self.frames = 0
-        self.mic_choice = None
+        self.channels = 1
         self.reported = False
 
     def start_audio(self):
@@ -101,10 +31,12 @@ class SoundReceiver(ALModule):
         try:
             try:
                 self.audio.setClientPreferences(self.name, SAMPLE_RATE, ALL_MICS, 0)
+                self.channels = 4
                 print "mic mode: all four"
             except Exception:
                 print "all mics failed, using front"
                 self.audio.setClientPreferences(self.name, SAMPLE_RATE, FRONT_MIC, 0)
+                self.channels = 1
             self.audio.subscribe(self.name)
             self.subscribed = True
             print "mic subscribed as", self.name
@@ -136,21 +68,12 @@ class SoundReceiver(ALModule):
         if not self.reported:
             self.reported = True
             print "audio channels", nbOfChannels, "samples", nbrOfSamplesByChannel
-        try:
-            mono, chosen = mix_mics(buffer, nbOfChannels, nbrOfSamplesByChannel, self.mic_choice)
-        except Exception:
-            traceback.print_exc()
-            mono = buffer
-            chosen = self.mic_choice
-        if chosen != self.mic_choice:
-            print "using mic", chosen
-            self.mic_choice = chosen
         with self.lock:
             sock = self.client
         if sock is None:
             return
         try:
-            sock.sendall(mono)
+            sock.sendall(buffer)
         except Exception:
             print "client gone, waiting for Mac again"
             self.alive = False
@@ -172,12 +95,12 @@ def serve():
         print "Mac connected", addr
         try:
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            conn.sendall("READY")
+            SoundReceiver.start_audio()
+            conn.sendall("MIC%02d" % SoundReceiver.channels)
         except Exception:
             traceback.print_exc()
             continue
         SoundReceiver.set_client(conn)
-        SoundReceiver.start_audio()
         try:
             while SoundReceiver.alive and SoundReceiver.client is conn:
                 time.sleep(0.25)

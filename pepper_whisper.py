@@ -28,6 +28,9 @@ _reader_stop = threading.Event()
 
 SAMPLE_RATE = 16000
 FRAME_MS = 30
+MIC_CHANNELS = 1
+# Head mics are a few centimeters apart, so the voice arrives within this many samples.
+MAX_MIC_LAG = 8
 
 THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 SYSTEM = {
@@ -194,6 +197,45 @@ def pcm16_to_float(buf: bytes) -> np.ndarray:
     samples = struct.unpack("<%dh" % n, buf[: n * 2])
     return np.asarray(samples, dtype=np.float32) / 32768.0
 
+_beam_buf = None
+
+def gcc_phat_lag(sig: np.ndarray, ref: np.ndarray, max_lag: int = MAX_MIC_LAG) -> int:
+    """Samples that sig is delayed relative to ref. Phase transform ignores loudness."""
+    n = int(len(sig) + len(ref))
+    nfft = 1 << (n - 1).bit_length()
+    cross = np.fft.rfft(sig, n=nfft) * np.conj(np.fft.rfft(ref, n=nfft))
+    cross /= np.maximum(np.abs(cross), 1e-12)
+    cc = np.fft.irfft(cross, n=nfft)
+    window = np.concatenate((cc[-max_lag:], cc[: max_lag + 1]))
+    return int(np.argmax(window) - max_lag)
+
+def _shift(samples: np.ndarray, lag: int) -> np.ndarray:
+    if lag == 0:
+        return samples
+    out = np.zeros_like(samples)
+    if lag > 0:
+        out[:-lag] = samples[lag:]
+    else:
+        out[-lag:] = samples[:lag]
+    return out
+
+def beamform(samples: np.ndarray, n_channels: int) -> np.ndarray:
+    """Line up all microphones with GCC-PHAT and add them."""
+    global _beam_buf
+    chans = samples.reshape(-1, n_channels)
+    if _beam_buf is None or _beam_buf.shape[1] != n_channels:
+        _beam_buf = chans.copy()
+    else:
+        _beam_buf = np.concatenate((_beam_buf, chans), axis=0)
+        if len(_beam_buf) > SAMPLE_RATE // 5:
+            _beam_buf = _beam_buf[-SAMPLE_RATE // 5 :]
+    ref = int(np.argmax(np.mean(_beam_buf * _beam_buf, axis=0)))
+    parts = []
+    for c in range(n_channels):
+        lag = 0 if c == ref else gcc_phat_lag(_beam_buf[:, c], _beam_buf[:, ref])
+        parts.append(_shift(chans[:, c], lag))
+    return np.mean(parts, axis=0).astype(np.float32)
+
 def _mic_reader():
     global _mic_sock
     while not _reader_stop.is_set():
@@ -224,7 +266,8 @@ _reader_thread = threading.Thread(target=_mic_reader, daemon=True)
 _reader_thread.start()
 
 def mic_close():
-    global _mic_sock
+    global _mic_sock, _beam_buf
+    _beam_buf = None
     if _mic_sock is not None:
         try:
             _mic_sock.close()
@@ -235,7 +278,7 @@ def mic_close():
         _pcm_buf.clear()
 
 def mic_connect():
-    global _mic_sock
+    global _mic_sock, MIC_CHANNELS
     if _mic_sock is not None:
         return _mic_sock
     last_err = None
@@ -245,7 +288,12 @@ def mic_connect():
             s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             s.settimeout(5.0)
             banner = s.recv(5)
-            print("Pepper mic:", repr(banner))
+            text = banner.decode("ascii", "replace") if isinstance(banner, bytes) else banner
+            if text.startswith("MIC") and text[3:5].isdigit():
+                MIC_CHANNELS = int(text[3:5])
+            else:
+                MIC_CHANNELS = 1
+            print("Pepper mic:", text, "channels", MIC_CHANNELS)
             _mic_sock = s
             return s
         except Exception as e:
@@ -255,6 +303,8 @@ def mic_connect():
     raise RuntimeError("could not connect to Pepper mic: %s" % last_err)
 
 def pcm_clear():
+    global _beam_buf
+    _beam_buf = None
     with _mic_lock:
         _pcm_buf.clear()
 
@@ -284,13 +334,16 @@ def hear() -> str:
     pcm_clear()
 
     frame_n = int(SAMPLE_RATE * FRAME_MS / 1000)
-    need = frame_n * 2
+    need = frame_n * 2 * max(1, MIC_CHANNELS)
 
     def read_frame():
         raw = read_pcm_bytes(need, timeout=2.0)
         if raw is None:
             return None
-        return pcm16_to_float(raw)
+        samples = pcm16_to_float(raw)
+        if MIC_CHANNELS <= 1:
+            return samples
+        return beamform(samples, MIC_CHANNELS)
 
     noise_vals = []
     for _ in range(max(1, int(CALIBRATE_MS / FRAME_MS))):
